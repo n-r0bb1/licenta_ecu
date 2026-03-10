@@ -1,0 +1,98 @@
+# =========================
+# Python
+# =========================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# Unit test / coverage
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# =========================
+# C++ / CMake
+# =========================
+
+# Compiled objects
+*.o
+*.obj
+*.so
+*.a
+*.out
+*.exe
+*.dll
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+compile_commands.json
+Makefile
+
+# Build directories
+build/
+bin/
+lib/
+
+# =========================
+# Editors / IDE
+# =========================
+
+# VS Code
+.vscode/
+
+# CLion / IntelliJ
+.idea/
+
+# Eclipse
+.project
+.cproject
+.settings/
+
+# Vim
+*.swp
+*.swo
+
+# =========================
+# OS files
+# =========================
+
+# Linux
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# =========================
+# Misc
+# =========================
+
+# Temporary files
+tmp/
+temp/
+*.tmp
