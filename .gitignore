@@ -54,7 +54,6 @@ Makefile
 # Build directories
 build/
 bin/
-lib/
 
 # =========================
 # Editors / IDE
@@ -95,4 +94,5 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
-*.tmp
+*.tmp.pio/
+*.pio
