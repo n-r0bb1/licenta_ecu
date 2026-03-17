@@ -1,4 +1,13 @@
 # =========================
+# PlatformIO
+# =========================
+
+.pio/
+.pioenvs/
+.piolibdeps/
+.platformio/
+
+# =========================
 # Python
 # =========================
 
@@ -6,36 +15,30 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
 venv/
 env/
 .venv/
 ENV/
 
-# Distribution / packaging
 build/
 dist/
 *.egg-info/
 .eggs/
 
-# Logs
 *.log
 
-# Unit test / coverage
 htmlcov/
 .coverage
 .coverage.*
 .pytest_cache/
 .tox/
 
-# Jupyter Notebook
 .ipynb_checkpoints
 
 # =========================
 # C++ / CMake
 # =========================
 
-# Compiled objects
 *.o
 *.obj
 *.so
@@ -44,55 +47,43 @@ htmlcov/
 *.exe
 *.dll
 
-# CMake
 CMakeFiles/
 CMakeCache.txt
 cmake-build-*/
 compile_commands.json
 Makefile
 
-# Build directories
-build/
 bin/
 
 # =========================
-# Editors / IDE
+# VSCode
 # =========================
 
-# VS Code
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 
-# CLion / IntelliJ
+# =========================
+# Other IDEs
+# =========================
+
 .idea/
-
-# Eclipse
 .project
 .cproject
 .settings/
 
-# Vim
+# =========================
+# OS / Misc
+# =========================
+
+*~
+.DS_Store
+Thumbs.db
+
 *.swp
 *.swo
 
-# =========================
-# OS files
-# =========================
-
-# Linux
-*~
-
-# macOS
-.DS_Store
-
-# Windows
-Thumbs.db
-
-# =========================
-# Misc
-# =========================
-
-# Temporary files
 tmp/
 temp/
-*.tmp.pio/
-*.pio
+*.tmp
