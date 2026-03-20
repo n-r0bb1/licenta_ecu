@@ -1,7 +1,11 @@
 # test_button.py
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout
-from PySide6.QtCore import Qt
+import os 
+from PySide6.QtWidgets import *
+from PySide6.QtCore import Qt 
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 from widgets.button import NavButton
 
 if __name__ == "__main__":

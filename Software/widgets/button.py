@@ -1,7 +1,11 @@
-# widgets/nav_button.py
+import sys, os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+##
 from PySide6.QtWidgets import QPushButton
-from PySide6.QtCore import QSize
-import PySide6 as Qt 
+from PySide6.QtCore import QSize, Qt
+from widgets import config 
+
 class NavButton(QPushButton):
     def __init__(self, label, icon=None, parent=None):
         super().__init__(label, parent)
@@ -12,27 +16,25 @@ class NavButton(QPushButton):
             self.setIconSize(QSize(24, 24))
 
     def setup_style(self):
-        self.setMinimumHeight(45)
-        self.setMinimumWidth(150)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #2c2c2c;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 14px;
-                text-align: left;
-            }
-            QPushButton:hover {
-                background-color: #3d3d3d;
-            }
-            QPushButton:pressed {
-                background-color: #1a1a1a;
-            }
-            QPushButton:checked {
-                background-color: #0078d4;
-            }
-        """)
+        self.setMinimumHeight(config.BUTTON_HEIGHT)
+        self.setMinimumWidth(config.BUTTON_WIDTH)
+        self.setStyleSheet(f"""
+        QPushButton {{
+        background-color: {config.BACKGROUND_COLOR};
+        color: {config.TEXT_COLOR};
+        font-family: {config.FONT_FAMILY};
+        font-size: {config.FONT_SIZE}px;
+        border-radius: {config.BORDER_RADIUS}px;
+        border: none;
+        }}
+        QPushButton:hover {{
+            background-color: {config.BACKGROUND_HOVER};
+        }}
+        QPushButton:pressed {{
+            background-color: {config.BACKGROUND_PRESSED};
+        }}
+        QPushButton:checked {{
+            background-color: {config.BACKGROUND_PRESSED};
+        }}
+""")
         self.setCheckable(True)  # allows active/selected state
