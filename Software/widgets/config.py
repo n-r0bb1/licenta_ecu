@@ -6,16 +6,16 @@ PATH_LOGS           =  ""
 PATH_CSV            = ""
 
 #WINDOW
-WINDOW_HEIGHT       = 1920
-WINDOW_WIDTH        = 1080
-
+WINDOW_HEIGHT           = 1920
+WINDOW_WIDTH            = 1080
+WINDOW_BACKGROUND_COLOR  = "#000020"
 
 ############BUTTON############
 #SIZE
-BUTTON_HEIGHT       = 45
-BUTTON_WIDTH        = 150
+BUTTON_HEIGHT       = 60
+BUTTON_WIDTH        = 250
 ALIGN               = "left"
-BORDER_RADIUS       = 6
+BORDER_RADIUS       = 50
 
 #COLORS
 BACKGROUND_COLOR    = "#100000"

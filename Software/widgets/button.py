@@ -13,7 +13,7 @@ class NavButton(QPushButton):
         
         if icon:
             self.setIcon(icon)
-            self.setIconSize(QSize(24, 24))
+            self.setIconSize(QSize(100, 24))
 
     def setup_style(self):
         self.setMinimumHeight(config.BUTTON_HEIGHT)
@@ -24,8 +24,10 @@ class NavButton(QPushButton):
         color: {config.TEXT_COLOR};
         font-family: {config.FONT_FAMILY};
         font-size: {config.FONT_SIZE}px;
-        border-radius: {config.BORDER_RADIUS}px;
+        border-radius: 0; 
         border: none;
+        border-top: 3px solid {config.TEXT_COLOR}
+       
         }}
         QPushButton:hover {{
             background-color: {config.BACKGROUND_HOVER};
@@ -37,4 +39,4 @@ class NavButton(QPushButton):
             background-color: {config.BACKGROUND_PRESSED};
         }}
 """)
-        self.setCheckable(True)  # allows active/selected state
+        self.setCheckable(True) 
