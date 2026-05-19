@@ -7,7 +7,7 @@ class ConfigDock(QWidget):  # Must inherit QWidget
         self.setup_widgets()
 
     def setup_widgets(self):
-        layout = QVBoxLayout(self)  # Layout goes on self, not panel directly
+        layout = QVBoxLayout(self)  
         
         panel = QGroupBox("Config")
         panel_layout = QVBoxLayout(panel)  

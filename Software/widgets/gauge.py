@@ -1,11 +1,7 @@
-import sys
 import math
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget,
-    QVBoxLayout, QHBoxLayout, QSlider, QLabel
-)
+from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QPainter, QPen, QColor, QFont, QBrush
+from PySide6.QtGui import QPainter, QPen, QColor, QFont
 
 
 class AnalogGauge(QWidget):
@@ -218,97 +214,3 @@ class AnalogGauge(QWidget):
             Qt.AlignmentFlag.AlignCenter,
             self.label,
         )
-
-
-# ── Test window ───────────────────────────────────────────────────────────────
-
-class TestWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Analog Gauge Test")
-        self.setStyleSheet("background-color: #0a0a14; color: white;")
-        self.resize(700, 400)
-
-        # --- three gauges ---
-        rpm_gauge = AnalogGauge()
-        rpm_gauge.min_value = 0
-        rpm_gauge.max_value = 8000
-        rpm_gauge.label = "RPM"
-        rpm_gauge.zones = [
-            (0.0, 0.6, "#00aaff"),
-            (0.6, 0.8, "#ffaa00"),
-            (0.8, 1.0, "#ff3333"),
-        ]
-
-        temp_gauge = AnalogGauge()
-        temp_gauge.min_value = 0
-        temp_gauge.max_value = 120
-        temp_gauge.label = "°C  COOLANT"
-        temp_gauge.zones = [
-            (0.0, 0.5, "#00aaff"),
-            (0.5, 0.75, "#00cc88"),
-            (0.75, 1.0, "#ff3333"),
-        ]
-
-        boost_gauge = AnalogGauge()
-        boost_gauge.min_value = -1
-        boost_gauge.max_value = 3
-        boost_gauge.label = "BAR  BOOST"
-        boost_gauge.zones = [
-            (0.0,  0.25, "#555577"),
-            (0.25, 0.75, "#00aaff"),
-            (0.75, 1.0,  "#ff3333"),
-        ]
-
-        # --- sliders ---
-        def make_slider(gauge, min_val, max_val):
-            slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(min_val, max_val)
-            slider.setValue(min_val)
-            slider.valueChanged.connect(gauge.set_value)
-            slider.setStyleSheet("""
-                QSlider::groove:horizontal {
-                    height: 4px; background: #2a2a3e; border-radius: 2px;
-                }
-                QSlider::handle:horizontal {
-                    width: 14px; height: 14px; margin: -5px 0;
-                    background: #00aaff; border-radius: 7px;
-                }
-                QSlider::sub-page:horizontal {
-                    background: #00aaff; border-radius: 2px;
-                }
-            """)
-            return slider
-
-        rpm_slider   = make_slider(rpm_gauge,   0, 8000)
-        temp_slider  = make_slider(temp_gauge,  0, 120)
-        boost_slider = make_slider(boost_gauge, -1, 3)
-
-        def make_col(gauge, slider, title):
-            lbl = QLabel(title)
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet("color: #6666aa; font-size: 11px; margin-bottom: 4px;")
-            col = QVBoxLayout()
-            col.addWidget(gauge)
-            col.addWidget(lbl)
-            col.addWidget(slider)
-            w = QWidget()
-            w.setLayout(col)
-            return w
-
-        row = QHBoxLayout()
-        row.setSpacing(20)
-        row.addWidget(make_col(rpm_gauge,   rpm_slider,   "drag to set RPM"))
-        row.addWidget(make_col(temp_gauge,  temp_slider,  "drag to set temp"))
-        row.addWidget(make_col(boost_gauge, boost_slider, "drag to set boost"))
-
-        container = QWidget()
-        container.setLayout(row)
-        self.setCentralWidget(container)
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = TestWindow()
-    window.show()
-    sys.exit(app.exec())

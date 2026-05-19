@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox
 import sys, os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-##
+
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtCore import QSize, Qt
 from widgets import config 
