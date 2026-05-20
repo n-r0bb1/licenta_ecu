@@ -40,7 +40,7 @@ BACKGROUND_ACTIVE  = "#0a0a35"
 
 # FONT
 FONT_FAMILY = "Quantico"
-FONT_SIZE   = 13
+FONT_SIZE   = 20
 
 # SHARED PANEL CARD STYLE  (used by every QGroupBox panel)
 PANEL_STYLE = f"""

@@ -2,9 +2,10 @@
 import sys, os
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QStackedWidget,
-    QVBoxLayout, QLabel, QDockWidget, QFrame
+    QVBoxLayout, QHBoxLayout, QLabel, QDockWidget, QFrame
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from widgets.button import NavButton
 
 from panels.home_panel import HomeDock
@@ -76,30 +77,52 @@ class MainWindow(QMainWindow):
         nav_layout.setSpacing(0)
 
         # brand title
-        title = QLabel("PegaECU's")
-        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        title.setFixedHeight(64)
+        title = QWidget()
+        title.setFixedHeight(90)
         title.setStyleSheet(f"""
-            font-size: 20px;
+            QWidget {{
+                border-bottom: 1px solid {config.BORDER_COLOR};
+                background-color: {config.SURFACE_NAV};
+            }}
+        """)
+        title_layout = QHBoxLayout(title)
+        title_layout.setContentsMargins(40, 16, 20, 16)
+        title_layout.setSpacing(12)
+
+        logo_lbl = QLabel()
+        logo_lbl.setStyleSheet("background: transparent; border: none;")
+        pixmap = QPixmap(os.path.join(ICONS, "pegasus.png")).scaled(
+            48, 48, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        logo_lbl.setPixmap(pixmap)
+        logo_lbl.setFixedSize(48, 48)
+
+        text_lbl = QLabel("PegaECUs")
+        text_lbl.setStyleSheet(f"""
+            font-size: 25px;
             font-weight: bold;
             color: {config.TEXT_COLOR};
             font-family: {config.FONT_FAMILY};
-            padding-left: 20px;
-            border-bottom: 1px solid {config.BORDER_COLOR};
-            background-color: {config.SURFACE_NAV};
+            border: none;
+            background: transparent;
         """)
+
+        title_layout.addWidget(logo_lbl)
+        title_layout.addWidget(text_lbl)
+        title_layout.addStretch(1)
 
         # divider under title
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"background-color: {config.BORDER_COLOR};")
-        sep.setFixedHeight(1)
+        sep.setFixedHeight(3)
 
         self._btns = []
-        btn_home      = NavButton("Home",      icon=os.path.join(ICONS, "home.png"))
-        btn_settings  = NavButton("Settings")
-        btn_telemetry = NavButton("Telemetry")
-        btn_fuelmaps  = NavButton("Fuel Maps")
+        btn_home      = NavButton("Home",icon=os.path.join(ICONS, "home.png"))
+        btn_settings  = NavButton("Settings",icon=os.path.join(ICONS, "setting.png"))
+        btn_telemetry = NavButton("Telemetry",icon=os.path.join(ICONS, "line-chart.png"))
+        btn_fuelmaps  = NavButton("Fuel Maps",icon=os.path.join(ICONS, "setting.png"))
         self._btns = [btn_home, btn_settings, btn_telemetry, btn_fuelmaps]
 
         def switch(index):
@@ -113,6 +136,8 @@ class MainWindow(QMainWindow):
         btn_fuelmaps.clicked.connect(lambda: switch(3))
 
         nav_layout.addWidget(title)
+        nav_layout.addWidget(sep)
+        nav_layout.addSpacing(10)
         for btn in self._btns:
             nav_layout.addWidget(btn)
         nav_layout.addStretch(1)
