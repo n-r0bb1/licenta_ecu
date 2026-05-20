@@ -20,7 +20,7 @@ class AnalogGauge(QWidget):
             (0.8,  1.0,  "#ff3333"),
         ]
 
-        self.setMinimumSize(220, 220)
+        self.setMinimumSize(160, 160)
 
     def set_value(self, value):
         self._value = max(self.min_value, min(self.max_value, value))

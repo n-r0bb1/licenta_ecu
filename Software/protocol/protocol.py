@@ -27,7 +27,10 @@ def parse_line(line: str) -> SensorPacket | None:
             key, _, raw = part.partition(":")
             name = _KEYS.get(key.strip())
             if name:
-                fields[name] = float(raw)
+                try:
+                    fields[name] = float(raw)
+                except ValueError:
+                    fields[name] = float("nan")
         if len(fields) != len(_KEYS):
             return None
         return SensorPacket(**fields)
