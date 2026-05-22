@@ -64,6 +64,7 @@ bin/
 !.vscode/extensions.json
 !.vscode/launch.json
 
+.vscode
 # =========================
 # Other IDEs
 # =========================
