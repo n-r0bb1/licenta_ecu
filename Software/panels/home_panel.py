@@ -3,9 +3,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QFrame, QLabel
+    QFrame, QLabel, QLineEdit
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QDoubleValidator
 from widgets import config
 from widgets.gauge import AnalogGauge
 
@@ -47,11 +48,66 @@ class MetricCard(QFrame):
             background: transparent;
         """)
 
+        offset_row = QHBoxLayout()
+        offset_row.setSpacing(6)
+
+        offset_lbl = QLabel("Offset")
+        offset_lbl.setStyleSheet(f"""
+            color: {config.TEXT_MUTED};
+            font-size: 9px;
+            font-family: {config.FONT_FAMILY};
+            border: none;
+            background: transparent;
+        """)
+
+        self._offset_edit = QLineEdit("0.0")
+        self._offset_edit.setValidator(QDoubleValidator(-9999.0, 9999.0, 2))
+        self._offset_edit.setFixedWidth(60)
+        self._offset_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._offset_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {config.SURFACE_CARD};
+                color: {config.TEXT_COLOR};
+                border: 1px solid {config.BORDER_COLOR};
+                border-radius: 4px;
+                font-size: 11px;
+                font-family: {config.FONT_FAMILY};
+                padding: 2px 4px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {color};
+            }}
+        """)
+        self._offset_edit.textChanged.connect(self._on_offset_changed)
+
+        offset_row.addStretch(1)
+        offset_row.addWidget(offset_lbl)
+        offset_row.addWidget(self._offset_edit)
+        offset_row.addStretch(1)
+
         layout.addWidget(title_lbl)
         layout.addWidget(self._value_lbl)
+        layout.addLayout(offset_row)
 
-    def set_value(self, val: float):
-        self._value_lbl.setText(f"{val:.1f}{self._unit}")
+        self._raw_value = 0.0
+        self._on_change = None  # callback(calibrated_value) invoked when offset changes
+
+    def _on_offset_changed(self, _text):
+        calibrated = self.set_raw(self._raw_value)
+        if self._on_change is not None:
+            self._on_change(calibrated)
+
+    def offset(self) -> float:
+        try:
+            return float(self._offset_edit.text())
+        except ValueError:
+            return 0.0
+
+    def set_raw(self, raw_val: float):
+        self._raw_value = raw_val
+        calibrated = raw_val + self.offset()
+        self._value_lbl.setText(f"{calibrated:.1f}{self._unit}")
+        return calibrated
 
 
 class HomeDock(QWidget):
@@ -113,6 +169,9 @@ class HomeDock(QWidget):
             card.setMinimumHeight(100)
             cards_row.addWidget(card)
 
+        # fuel offset must also recalibrate the fuel gauge needle
+        self._fuel_card._on_change = self.fuel_gauge.set_value
+
         panel_layout.addLayout(gauges_row)
         panel_layout.addSpacing(24)
         panel_layout.addLayout(cards_row)
@@ -122,8 +181,8 @@ class HomeDock(QWidget):
 
     def _on_packet(self, pkt):
         self.throttle_gauge.set_value(pkt.throttle_pct)
-        self.fuel_gauge.set_value(pkt.fuel_pct)
-        self._air_card.set_value(pkt.air_temp)
-        self._eng_card.set_value(pkt.eng_temp)
-        self._fuel_card.set_value(pkt.fuel_pct)
-        self._pres_card.set_value(pkt.pressure)
+        self._air_card.set_raw(pkt.air_temp)
+        self._eng_card.set_raw(pkt.eng_temp)
+        calibrated_fuel = self._fuel_card.set_raw(pkt.fuel_pct)
+        self.fuel_gauge.set_value(calibrated_fuel)
+        self._pres_card.set_raw(pkt.pressure)

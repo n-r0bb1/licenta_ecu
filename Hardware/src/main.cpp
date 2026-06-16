@@ -5,41 +5,38 @@
 #include "sensors/headers/FuelSensor.h"
 #include "sensors/headers/EngTempSensor.h"
 #include "sensors/headers/AirTempSensor.h"
-#include "sensors/headers/PresSensor.h"
 #include "serial/PacketBuilder.h"
 
-static uint32_t _lastSample = 0;
+static uint32_t _lastSerial = 0;
 
 void setup() {
     Serial.begin(BAUD_RATE);
 
     throttle_begin();
-    // fuel_begin();
+    fuel_begin();
     engtemp_begin();
-    // airtemp_begin();
-    // pres_begin();
+    airtemp_begin();
 
+    delay(2000);
     Serial.println("ECU Online");
 }
 
 void loop() {
     uint32_t now = millis();
 
-    if (now - _lastSample >= SAMPLE_INTERVAL) {
-        _lastSample = now;
+    if (now - _lastSerial >= SAMPLE_INTERVAL) {
+        _lastSerial = now;
 
         throttle_update();
-        // fuel_update();
-        // engtemp_update();
-        // airtemp_update();
-        // pres_update();
+        fuel_update();
+        airtemp_update();
 
         SensorPacket pkt;
         pkt.throttle_pct = throttle_getPercent();
-        //pkt.fuel_pct     = fuel_getPercent();
-        //pkt.eng_temp     = engtemp_getcelsius();
-        pkt.air_temp      = engtemp_getTemp();
-        //pkt.pressure     = pres_gethpa();
+        pkt.fuel_pct     = fuel_getPercent();
+        pkt.eng_temp     = engtemp_getTemp();
+        pkt.air_temp     = airtemp_getTemp();
+        pkt.humidity     = airtemp_getHumidity();
 
         packet_send(pkt);
     }
