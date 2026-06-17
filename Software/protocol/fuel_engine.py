@@ -23,6 +23,7 @@ import os, csv, json, re
 # ── paths ─────────────────────────────────────────────────────────────────────
 _CARS_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "cars.json")
 _MAPS_DIR  = os.path.join(os.path.dirname(__file__), "..", "data", "fuel_maps")
+_VE_DIR    = os.path.join(os.path.dirname(__file__), "..", "data", "ve_maps")
 
 # ── fuel map grid ─────────────────────────────────────────────────────────────
 RPM_STEPS  = list(range(1000, 9000, 1000))
@@ -64,6 +65,18 @@ def _slug(name: str) -> str:
 
 def _load_map(car_name: str) -> list[list[float]] | None:
     path = os.path.join(_MAPS_DIR, f"{_slug(car_name)}.csv")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, newline="") as f:
+            rows = list(csv.reader(f))
+        return [[float(v) for v in row[1:]] for row in rows[1:]]
+    except Exception:
+        return None
+
+
+def _load_ve_map(car_name: str) -> list[list[float]] | None:
+    path = os.path.join(_VE_DIR, f"{_slug(car_name)}.csv")
     if not os.path.exists(path):
         return None
     try:
@@ -120,6 +133,7 @@ class FuelMapEngine:
         self._cylinders  = 4
         self._tank_l     = 50.0
         self._map: list[list[float]] | None = None
+        self._ve_map: list[list[float]] | None = None
         self._car_name   = ""
 
         # internal shift state
@@ -137,16 +151,23 @@ class FuelMapEngine:
             self._cylinders = _cylinders_from_cc(cc)
             self._tank_l    = float(tank_liters or car.get("tank_liters", 50))
 
-        self._map = _load_map(car_name)
-        self._gear = 1
+        self._map    = _load_map(car_name)
+        self._ve_map = _load_ve_map(car_name)
+        self._gear   = 1
 
     def set_tank(self, liters: float):
         self._tank_l = liters
 
     def reload_map(self):
-        """Re-read the CSV from disk (called after the fuel map editor saves)."""
+        """Re-read both CSVs from disk (called after the map editor saves)."""
         if self._car_name:
-            self._map = _load_map(self._car_name)
+            self._map    = _load_map(self._car_name)
+            self._ve_map = _load_ve_map(self._car_name)
+
+    def reload_ve_map(self):
+        """Re-read only the VE map from disk."""
+        if self._car_name:
+            self._ve_map = _load_ve_map(self._car_name)
 
     # ── core update ───────────────────────────────────────────────────────────
 
@@ -160,11 +181,12 @@ class FuelMapEngine:
         load  = max(0.0, min(100.0, throttle_pct))
         rpm   = self._auto_rpm(load)
         pw    = self._lookup_pulse(load, rpm)
+        ve    = self._lookup_ve(load, rpm) / 100.0   # 0.0–1.0
 
-        # instantaneous fuel flow
+        # instantaneous fuel flow scaled by volumetric efficiency
         # fires = rpm / (2 * 60) firings per second per cylinder (4-stroke)
         firings_per_sec = rpm / (_STROKES * 60.0)
-        flow_ml_s       = pw * _ML_PER_MS * self._cylinders * firings_per_sec
+        flow_ml_s       = pw * _ML_PER_MS * self._cylinders * firings_per_sec * ve
 
         # speed: rpm expressed as fraction of rpm_max → fraction of max_speed
         # (linear approximation: at rpm_max in top gear = max_speed)
@@ -221,8 +243,19 @@ class FuelMapEngine:
 
     def _lookup_pulse(self, load_pct: float, rpm: float) -> float:
         if self._map is None:
-            # fallback formula if no map is loaded
             return round(2.0 + (load_pct / 100) * 9.0 + (rpm / 8000) * 4.0, 1)
         row = _nearest_row(load_pct)
         col = _nearest_col(rpm)
         return self._map[row][col]
+
+    def _lookup_ve(self, load_pct: float, rpm: float) -> float:
+        """Return volumetric efficiency % (0–100). Falls back to default curve."""
+        if self._ve_map is None:
+            # default VE curve: peaks ~85% at mid-RPM/high-load, drops at extremes
+            rpm_norm  = min(rpm, RPM_STEPS[-1]) / RPM_STEPS[-1]
+            load_norm = load_pct / 100.0
+            ve = 60.0 + load_norm * 20.0 + rpm_norm * (1.0 - rpm_norm) * 40.0
+            return round(min(ve, 100.0), 1)
+        row = _nearest_row(load_pct)
+        col = _nearest_col(rpm)
+        return self._ve_map[row][col]

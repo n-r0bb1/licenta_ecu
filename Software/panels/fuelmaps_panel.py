@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QSizePolicy, QComboBox,
+    QFrame, QSizePolicy, QComboBox, QStackedWidget,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush, QFont, QPainter
@@ -14,6 +14,7 @@ from widgets import config
 # ── paths ─────────────────────────────────────────────────────────────────────
 _CARS_JSON    = os.path.join(os.path.dirname(__file__), "..", "data", "cars.json")
 _MAPS_DIR     = os.path.join(os.path.dirname(__file__), "..", "data", "fuel_maps")
+_VE_DIR       = os.path.join(os.path.dirname(__file__), "..", "data", "ve_maps")
 
 # ── fuel map constants ────────────────────────────────────────────────────────
 RPM_STEPS  = list(range(1000, 9000, 1000))   # 1000 … 8000
@@ -23,6 +24,10 @@ RPM_MAX    = 8000
 BASE        = 2.0
 LOAD_FACTOR = 9.0
 RPM_FACTOR  = 4.0
+
+# ── VE map constants ──────────────────────────────────────────────────────────
+VE_MIN = 60.0   # % floor for default curve
+VE_MAX = 100.0
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -65,10 +70,59 @@ def _load_csv(car_name: str) -> list[list[float]] | None:
     try:
         with open(path, newline="") as f:
             rows = list(csv.reader(f))
-        # skip header, parse values (skip first column = load label)
         return [[float(v) for v in row[1:]] for row in rows[1:]]
     except Exception:
         return None
+
+
+# ── VE map helpers ────────────────────────────────────────────────────────────
+
+def _ve_csv_path(car_name: str) -> str:
+    return os.path.join(_VE_DIR, f"{_slug(car_name)}.csv")
+
+
+def _ve_formula(load_pct: float, rpm: int) -> float:
+    """Default VE curve: bell-shaped RPM peak, rising with load."""
+    rpm_norm  = rpm / RPM_MAX
+    load_norm = load_pct / 100.0
+    ve = VE_MIN + load_norm * 20.0 + rpm_norm * (1.0 - rpm_norm) * 40.0
+    return round(min(ve, VE_MAX), 1)
+
+
+def _build_default_ve_table() -> list[list[float]]:
+    return [[_ve_formula(load, rpm) for rpm in RPM_STEPS] for load in LOAD_STEPS]
+
+
+def _save_ve_csv(car_name: str, data: list[list[float]]):
+    os.makedirs(_VE_DIR, exist_ok=True)
+    with open(_ve_csv_path(car_name), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["load_pct"] + [str(r) for r in RPM_STEPS])
+        for r, load in enumerate(LOAD_STEPS):
+            w.writerow([str(load)] + [f"{v:.1f}" for v in data[r]])
+
+
+def _load_ve_csv(car_name: str) -> list[list[float]] | None:
+    path = _ve_csv_path(car_name)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, newline="") as f:
+            rows = list(csv.reader(f))
+        return [[float(v) for v in row[1:]] for row in rows[1:]]
+    except Exception:
+        return None
+
+
+def _ve_cell_color(value: float, v_min: float, v_max: float) -> tuple[QColor, QColor]:
+    """Low VE → green (120), high VE → cyan (180)."""
+    span = v_max - v_min
+    t    = (value - v_min) / span if span > 0 else 0.0
+    t    = max(0.0, min(1.0, t))
+    hue  = int(120 + t * 60)
+    bg   = QColor.fromHsl(hue, 200, 75)
+    fg   = QColor("#111111")
+    return bg, fg
 
 
 def _hsl_cell_color(value: float, v_min: float, v_max: float) -> tuple[QColor, QColor]:
@@ -428,6 +482,282 @@ class FuelMapTable(QWidget):
             )
 
 
+# ── VEMapTable ────────────────────────────────────────────────────────────────
+
+class VEMapTable(QWidget):
+    """Volumetric efficiency table — same layout/style as FuelMapTable."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._car_name: str = ""
+        self._data: list[list[float]] = _build_default_ve_table()
+        self._ignore_change = False
+        self._setup_ui()
+
+    def _setup_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(8)
+
+        # ── toolbar ───────────────────────────────────────────────────────────
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
+
+        car_lbl = QLabel("Car:")
+        car_lbl.setStyleSheet(f"""
+            color: {config.TEXT_MUTED};
+            font-family: {config.FONT_FAMILY};
+            font-size: 11px;
+        """)
+        self._combo = QComboBox()
+        self._combo.addItems(_car_names())
+        self._combo.setStyleSheet(_combo_style(config.ACCENT_GREEN))
+        self._combo.currentTextChanged.connect(self._on_car_changed)
+
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(f"""
+            color: {config.TEXT_MUTED};
+            font-family: {config.FONT_FAMILY};
+            font-size: 10px;
+            padding: 0 6px;
+        """)
+
+        self._hover_lbl = QLabel("")
+        self._hover_lbl.setStyleSheet(f"""
+            color: {config.ACCENT_GREEN};
+            font-family: {config.FONT_FAMILY};
+            font-size: 11px;
+            padding: 2px 8px;
+            border: 1px solid {config.BORDER_COLOR};
+            border-radius: 4px;
+        """)
+        self._hover_lbl.setFixedHeight(26)
+        self._hover_lbl.setMinimumWidth(260)
+
+        save_btn = QPushButton("💾  Save map")
+        save_btn.setFixedHeight(28)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setStyleSheet(_btn_style(config.ACCENT_GREEN))
+        save_btn.clicked.connect(self._save)
+
+        reset_btn = QPushButton("↺  Reset")
+        reset_btn.setFixedHeight(28)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setStyleSheet(_btn_style(config.ACCENT_AMBER))
+        reset_btn.clicked.connect(self._reset)
+
+        toolbar.addWidget(car_lbl)
+        toolbar.addWidget(self._combo)
+        toolbar.addWidget(self._status_lbl)
+        toolbar.addSpacing(8)
+        toolbar.addWidget(self._hover_lbl)
+        toolbar.addStretch(1)
+        toolbar.addWidget(self._build_legend())
+        toolbar.addSpacing(12)
+        toolbar.addWidget(save_btn)
+        toolbar.addWidget(reset_btn)
+
+        # ── x-axis label ──────────────────────────────────────────────────────
+        axis_row = QHBoxLayout()
+        axis_row.setSpacing(0)
+        corner = QLabel("")
+        corner.setFixedWidth(52)
+        x_lbl = QLabel("Engine RPM →")
+        x_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        x_lbl.setStyleSheet(
+            f"color: {config.TEXT_MUTED}; font-family: {config.FONT_FAMILY}; font-size: 10px;"
+        )
+        axis_row.addWidget(corner)
+        axis_row.addWidget(x_lbl)
+
+        # ── table ─────────────────────────────────────────────────────────────
+        self._table = QTableWidget(len(LOAD_STEPS), len(RPM_STEPS))
+        self._table.setHorizontalHeaderLabels([str(r) for r in RPM_STEPS])
+        self._table.setVerticalHeaderLabels([f"{l}%" for l in LOAD_STEPS])
+
+        hdr_style = f"""
+            QHeaderView::section {{
+                background-color: {config.SURFACE_RAISED};
+                color: {config.TEXT_COLOR};
+                font-family: {config.FONT_FAMILY};
+                font-size: 11px;
+                font-weight: bold;
+                padding: 4px;
+                border: none;
+                border-right: 1px solid {config.BORDER_COLOR};
+                border-bottom: 1px solid {config.BORDER_COLOR};
+            }}
+        """
+        self._table.horizontalHeader().setStyleSheet(hdr_style)
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table.verticalHeader().setStyleSheet(hdr_style)
+        self._table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.verticalHeader().setDefaultAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._table.verticalHeader().setFixedWidth(48)
+        self._table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {config.SURFACE_CARD};
+                gridline-color: {config.BORDER_COLOR};
+                border: 1px solid {config.BORDER_COLOR};
+                border-radius: 4px;
+            }}
+            QTableWidget::item {{
+                padding: 2px;
+                font-family: {config.FONT_FAMILY};
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QTableWidget::item:selected {{ border: 2px solid {config.ACCENT_GREEN}; }}
+        """)
+        self._table.cellChanged.connect(self._on_cell_changed)
+        self._table.cellEntered.connect(self._on_cell_hover)
+        self._table.setMouseTracking(True)
+
+        table_row = QHBoxLayout()
+        table_row.setSpacing(4)
+        table_row.addWidget(_RotatedLabel("Engine Load %  ↓", parent=self))
+        table_row.addWidget(self._table)
+
+        root.addLayout(toolbar)
+        root.addLayout(axis_row)
+        root.addLayout(table_row)
+
+        if self._combo.count():
+            self._on_car_changed(self._combo.currentText())
+
+    @staticmethod
+    def _build_legend() -> QWidget:
+        steps    = 40
+        swatches = QWidget()
+        h = QHBoxLayout(swatches)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        for i in range(steps):
+            t   = i / (steps - 1)
+            hue = int(120 * t)          # green=low VE → teal=high VE
+            c   = QColor.fromHsl(hue, 180, 80)
+            f   = QFrame()
+            f.setFixedSize(8, 16)
+            f.setStyleSheet(f"background: {c.name()}; border: none;")
+            h.addWidget(f)
+
+        s = f"color: {config.TEXT_MUTED}; font-size: 9px; font-family: {config.FONT_FAMILY};"
+        lo = QLabel("  low"); lo.setStyleSheet(s)
+        hi = QLabel("high  "); hi.setStyleSheet(s)
+
+        outer = QWidget()
+        row   = QHBoxLayout(outer)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        row.addWidget(lo)
+        row.addWidget(swatches)
+        row.addWidget(hi)
+        return outer
+
+    def sync_car(self, car_name: str):
+        """Called by FuelMapsDock when the fuel map car selector changes."""
+        idx = self._combo.findText(car_name)
+        if idx >= 0 and idx != self._combo.currentIndex():
+            self._combo.setCurrentIndex(idx)
+
+    def _on_car_changed(self, car_name: str):
+        self._car_name = car_name
+        loaded = _load_ve_csv(car_name)
+        if loaded and len(loaded) == len(LOAD_STEPS) and all(
+            len(row) == len(RPM_STEPS) for row in loaded
+        ):
+            self._data = loaded
+        else:
+            self._data = _build_default_ve_table()
+            _save_ve_csv(car_name, self._data)
+
+        self._populate(recolor=True)
+        self._update_status()
+
+    def _populate(self, recolor: bool = False):
+        self._ignore_change = True
+        if recolor:
+            flat  = [v for row in self._data for v in row]
+            v_min, v_max = min(flat), max(flat)
+
+        font = QFont(config.FONT_FAMILY, 10)
+        font.setBold(True)
+
+        for r in range(len(LOAD_STEPS)):
+            for c in range(len(RPM_STEPS)):
+                val  = self._data[r][c]
+                item = self._table.item(r, c)
+                if item is None:
+                    item = QTableWidgetItem()
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    item.setFont(font)
+                    self._table.setItem(r, c, item)
+                item.setText(f"{val:.1f}")
+                if recolor:
+                    bg, fg = _ve_cell_color(val, v_min, v_max)
+                    item.setBackground(QBrush(bg))
+                    item.setForeground(QBrush(fg))
+
+        self._ignore_change = False
+
+    def _recolor_all(self):
+        flat  = [v for row in self._data for v in row]
+        v_min, v_max = min(flat), max(flat)
+        for r in range(len(LOAD_STEPS)):
+            for c in range(len(RPM_STEPS)):
+                item = self._table.item(r, c)
+                if item:
+                    bg, fg = _ve_cell_color(self._data[r][c], v_min, v_max)
+                    item.setBackground(QBrush(bg))
+                    item.setForeground(QBrush(fg))
+
+    def _update_status(self):
+        path = _ve_csv_path(self._car_name)
+        self._status_lbl.setText(f"→ {os.path.relpath(path)}")
+
+    def _save(self):
+        if not self._car_name:
+            return
+        _save_ve_csv(self._car_name, self._data)
+        self._status_lbl.setText(f"Saved  →  {os.path.relpath(_ve_csv_path(self._car_name))}")
+
+    def _reset(self):
+        self._data = _build_default_ve_table()
+        self._populate(recolor=True)
+        if self._car_name:
+            _save_ve_csv(self._car_name, self._data)
+            self._update_status()
+
+    def _on_cell_changed(self, row: int, col: int):
+        if self._ignore_change:
+            return
+        item = self._table.item(row, col)
+        if item is None:
+            return
+        try:
+            val = max(0.0, min(100.0, float(item.text().replace(",", "."))))
+            self._data[row][col] = round(val, 1)
+        except ValueError:
+            self._ignore_change = True
+            item.setText(f"{self._data[row][col]:.1f}")
+            self._ignore_change = False
+            return
+        self._recolor_all()
+        if self._car_name:
+            _save_ve_csv(self._car_name, self._data)
+
+    def _on_cell_hover(self, row: int, col: int):
+        if 0 <= row < len(LOAD_STEPS) and 0 <= col < len(RPM_STEPS):
+            self._hover_lbl.setText(
+                f"RPM: {RPM_STEPS[col]}   "
+                f"Load: {LOAD_STEPS[row]}%   "
+                f"VE: {self._data[row][col]:.1f}%"
+            )
+
+
 # ── FuelMapsDock ──────────────────────────────────────────────────────────────
 
 class FuelMapsDock(QWidget):
@@ -443,6 +773,69 @@ class FuelMapsDock(QWidget):
         panel.setStyleSheet(config.PANEL_STYLE)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(16, 16, 16, 16)
-        panel_layout.addWidget(FuelMapTable())
+        panel_layout.setSpacing(10)
+
+        # ── tab bar ───────────────────────────────────────────────────────────
+        tab_row = QHBoxLayout()
+        tab_row.setSpacing(0)
+
+        self._tabs: list[QPushButton] = []
+        for i, (label, color) in enumerate([
+            ("Injector Pulse Width", config.ACCENT_PURPLE),
+            ("Volumetric Efficiency", config.ACCENT_GREEN),
+        ]):
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setChecked(i == 0)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(32)
+            btn.setProperty("tab_color", color)
+            btn.setStyleSheet(self._tab_style(color, checked=(i == 0)))
+            btn.clicked.connect(lambda _, idx=i: self._switch_tab(idx))
+            self._tabs.append(btn)
+            tab_row.addWidget(btn)
+
+        tab_row.addStretch(1)
+
+        # ── stacked tables ────────────────────────────────────────────────────
+        self._stack = QStackedWidget()
+        self._fuel_table = FuelMapTable()
+        self._ve_table   = VEMapTable()
+        self._stack.addWidget(self._fuel_table)
+        self._stack.addWidget(self._ve_table)
+
+        # keep car selectors in sync: fuel map drives VE map
+        self._fuel_table._combo.currentTextChanged.connect(self._ve_table.sync_car)
+
+        panel_layout.addLayout(tab_row)
+        panel_layout.addWidget(self._stack)
 
         root.addWidget(panel)
+
+    @staticmethod
+    def _tab_style(color: str, checked: bool) -> str:
+        bg = color if checked else "transparent"
+        fg = "#111111" if checked else color
+        return f"""
+            QPushButton {{
+                background-color: {bg};
+                color: {fg};
+                border: 1px solid {color};
+                border-radius: 0px;
+                font-family: {config.FONT_FAMILY};
+                font-size: 12px;
+                font-weight: bold;
+                padding: 6px 24px;
+            }}
+            QPushButton:hover {{
+                background-color: {config.SURFACE_RAISED};
+                color: {color};
+            }}
+        """
+
+    def _switch_tab(self, idx: int):
+        self._stack.setCurrentIndex(idx)
+        colors = [config.ACCENT_PURPLE, config.ACCENT_GREEN]
+        for i, btn in enumerate(self._tabs):
+            btn.setChecked(i == idx)
+            btn.setStyleSheet(self._tab_style(colors[i], checked=(i == idx)))

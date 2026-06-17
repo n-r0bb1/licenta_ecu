@@ -10,6 +10,9 @@ from PySide6.QtGui import QDoubleValidator
 from widgets import config
 from widgets.gauge import AnalogGauge, FuelGauge
 from protocol.fuel_engine import FuelMapEngine
+from protocol.ve_calibrator import VECalibrator
+
+_VE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "ve_maps")
 
 
 _CARS_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "cars.json")
@@ -445,7 +448,12 @@ class CarProfileCard(QFrame):
 class HomeDock(QWidget):
     def __init__(self, worker=None, parent=None):
         super().__init__(parent)
-        self._engine = FuelMapEngine()
+        self._engine     = FuelMapEngine()
+        self._calibrator = VECalibrator(
+            engine=self._engine,
+            ve_dir=_VE_DIR,
+            save_callback=self._on_ve_calibrated,
+        )
         self._setup_ui()
         if worker is not None:
             worker.packet_received.connect(self._on_packet)
@@ -567,6 +575,10 @@ class HomeDock(QWidget):
         tank        = profile.get("tank_liters", 50)
         car_name    = self._profile_card._combo.currentText()
 
+        # flush calibration data for the previous car before switching
+        self._calibrator.flush_now()
+        self._calibrator.reset()
+
         # update engine model
         self._engine.set_car(car_name, tank_liters=tank)
 
@@ -599,12 +611,20 @@ class HomeDock(QWidget):
         self.fuel_gauge.set_value(calibrated_fuel)
 
         # run fuel-map engine
+        tank_l     = self._fuel_card.tank_liters()
         cur_liters = self._fuel_card.current_liters()
-        self._engine.set_tank(self._fuel_card.tank_liters())
+        self._engine.set_tank(tank_l)
         self._engine.update(
             throttle_pct=pkt.throttle_pct,
             fuel_pct=calibrated_fuel,
             fuel_liters_override=cur_liters,
+        )
+
+        # run VE calibration (uses fuel drop between packets as ground truth)
+        self._calibrator.update(
+            throttle_pct=pkt.throttle_pct,
+            fuel_pct=calibrated_fuel,
+            tank_liters=tank_l,
         )
 
         # update gauges from engine output
@@ -618,3 +638,8 @@ class HomeDock(QWidget):
         self._mpg_card.set_value(self._engine.mpg)
         self._range_card.set_value(self._engine.range_km, decimals=0)
         self._gear_card.set_value(float(self._engine.gear), decimals=0)
+
+    def _on_ve_calibrated(self, car_name: str, ve_map: list[list[float]]):
+        """Called by VECalibrator after every SAVE_EVERY_N_UPDATES corrections."""
+        # reload into the engine so the next update() uses the corrected map
+        self._engine.reload_ve_map()
