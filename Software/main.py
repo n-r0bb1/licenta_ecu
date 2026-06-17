@@ -9,7 +9,7 @@ from PySide6.QtGui import QPixmap
 from widgets.button import NavButton
 
 from panels.home_panel import HomeDock
-from panels.config_panel import ConfigDock
+from panels.config_panel import LogsDock
 from panels.telemetry_panel import TelemDock
 from panels.fuelmaps_panel import FuelMapsDock
 from protocol.worker import SerialWorker
@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         self.stack.addWidget(HomeDock(worker=self._worker))   # 0
-        self.stack.addWidget(ConfigDock())                    # 1
+        self.stack.addWidget(LogsDock(worker=self._worker))   # 1
         self.stack.addWidget(TelemDock(worker=self._worker))  # 2
         self.stack.addWidget(FuelMapsDock())                  # 3
         self.setCentralWidget(self.stack)
@@ -120,7 +120,7 @@ class MainWindow(QMainWindow):
 
         self._btns = []
         btn_home      = NavButton("Home",icon=os.path.join(ICONS, "home.png"))
-        btn_settings  = NavButton("Settings",icon=os.path.join(ICONS, "setting.png"))
+        btn_settings  = NavButton("Logs",icon=os.path.join(ICONS, "setting.png"))
         btn_telemetry = NavButton("Telemetry",icon=os.path.join(ICONS, "line-chart.png"))
         btn_fuelmaps  = NavButton("Fuel Maps",icon=os.path.join(ICONS, "setting.png"))
         self._btns = [btn_home, btn_settings, btn_telemetry, btn_fuelmaps]

@@ -2,8 +2,8 @@
 
 # PATHS
 PATH_ICONS  = "widgets/icons/"
-PATH_LOGS   = "logs/"
-PATH_CSV    = "logs/"
+PATH_LOGS   = "data/logs/"
+PATH_CSV    = "data/logs/"
 PATH_IMAGES = ""
 
 # WINDOW

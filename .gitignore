@@ -6,7 +6,10 @@
 .pioenvs/
 .piolibdeps/
 .platformio/
+.claude
+*.claude
 
+CLAUDE.md
 # =========================
 # Python
 # =========================

@@ -3,7 +3,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QCheckBox
+from PySide6.QtCore import Qt
 import pyqtgraph as pg
 
 from protocol.worker import SerialWorker
@@ -12,7 +13,7 @@ from widgets import config
 
 PORT     = "/dev/ttyUSB0"
 BAUDRATE = 9600
-LOG_PATH = "logs/telemetry.csv"
+LOG_PATH = "data/logs/telemetry.csv"
 
 SERIES = {
     "throttle_pct": ("#00aaff", "Throttle %"),
@@ -26,7 +27,7 @@ SERIES = {
 class TelemDock(QWidget):
     def __init__(self, worker=None, port: str = PORT, baudrate: int = BAUDRATE, parent=None):
         super().__init__(parent)
-        os.makedirs("logs", exist_ok=True)
+        os.makedirs("data/logs", exist_ok=True)
         self._store       = DataStore(LOG_PATH)
         self._t0          = None
         self._curves      = {}
@@ -57,15 +58,49 @@ class TelemDock(QWidget):
         legend = self._graph.addLegend(offset=(12, 12))
         legend.setLabelTextColor(config.TEXT_COLOR)
 
+        self._checkboxes = {}
+        checkbox_row = QHBoxLayout()
+        checkbox_row.setSpacing(16)
+
         for field, (color, label) in SERIES.items():
             self._curves[field] = self._graph.plot(
                 [], [], pen=pg.mkPen(color, width=2), name=label
             )
 
+            cb = QCheckBox(label)
+            cb.setChecked(True)
+            cb.setStyleSheet(f"""
+                QCheckBox {{
+                    color: {color};
+                    font-family: {config.FONT_FAMILY};
+                    font-size: 11px;
+                    spacing: 6px;
+                }}
+                QCheckBox::indicator {{
+                    width: 14px;
+                    height: 14px;
+                    border: 1px solid {color};
+                    border-radius: 3px;
+                    background: transparent;
+                }}
+                QCheckBox::indicator:checked {{
+                    background: {color};
+                }}
+            """)
+            cb.stateChanged.connect(lambda state, f=field: self._toggle_curve(f, state))
+            self._checkboxes[field] = cb
+            checkbox_row.addWidget(cb)
+
+        checkbox_row.addStretch()
+
         panel_layout = QVBoxLayout(panel)
         panel_layout.addWidget(self._status)
+        panel_layout.addLayout(checkbox_row)
         panel_layout.addWidget(self._graph)
         layout.addWidget(panel)
+
+    def _toggle_curve(self, field: str, state: int):
+        self._curves[field].setVisible(state == Qt.CheckState.Checked.value)
 
     def _start_worker(self, port: str, baudrate: int):
         self._worker = SerialWorker(port, baudrate)
