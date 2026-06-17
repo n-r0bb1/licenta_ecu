@@ -1,0 +1,41 @@
+[
+  {
+    "name": "Honda Civic 1.5T",
+    "engine_cc": "1498 cc",
+    "engine_vol": "1.5 L",
+    "horsepower": "182 hp",
+    "traction": "FWD",
+    "weight": "1280 kg",
+    "fuel_type": "Gasoline",
+    "tank_liters": 47,
+    "max_speed_kmh": 230,
+    "rpm_max": 7000,
+    "rpm_redline": 6500
+  },
+  {
+    "name": "BMW 320d",
+    "engine_cc": "1995 cc",
+    "engine_vol": "2.0 L",
+    "horsepower": "190 hp",
+    "traction": "RWD",
+    "weight": "1530 kg",
+    "fuel_type": "Diesel",
+    "tank_liters": 59,
+    "max_speed_kmh": 240,
+    "rpm_max": 5000,
+    "rpm_redline": 4500
+  },
+  {
+    "name": "Toyota GR86",
+    "engine_cc": "2387 cc",
+    "engine_vol": "2.4 L",
+    "horsepower": "234 hp",
+    "traction": "RWD",
+    "weight": "1270 kg",
+    "fuel_type": "Gasoline",
+    "tank_liters": 50,
+    "max_speed_kmh": 226,
+    "rpm_max": 8000,
+    "rpm_redline": 7500
+  }
+]
