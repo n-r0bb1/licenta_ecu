@@ -5,6 +5,7 @@
 #include "sensors/headers/FuelSensor.h"
 #include "sensors/headers/EngTempSensor.h"
 #include "sensors/headers/AirTempSensor.h"
+#include "sensors/headers/PresSensor.h"
 #include "serial/PacketBuilder.h"
 
 static uint32_t _lastSerial = 0;
@@ -16,6 +17,7 @@ void setup() {
     fuel_begin();
     engtemp_begin();
     airtemp_begin();
+    pres_begin();
 
     delay(2000);
     Serial.println("ECU Online");
@@ -30,13 +32,14 @@ void loop() {
         throttle_update();
         fuel_update();
         airtemp_update();
+        pres_update();
 
         SensorPacket pkt;
         pkt.throttle_pct = throttle_getPercent();
         pkt.fuel_pct     = fuel_getPercent();
         pkt.eng_temp     = engtemp_getTemp();
         pkt.air_temp     = airtemp_getTemp();
-        pkt.humidity     = airtemp_getHumidity();
+        pkt.pressure     = pres_getPressure();
 
         packet_send(pkt);
     }

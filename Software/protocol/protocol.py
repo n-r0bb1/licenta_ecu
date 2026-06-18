@@ -20,10 +20,34 @@ _KEYS = {
 }
 
 
+def _xor_checksum(data: str) -> int:
+    cs = 0
+    for ch in data:
+        cs ^= ord(ch)
+    return cs
+
+
 def parse_line(line: str) -> SensorPacket | None:
+    """Parse a framed line: $payload*HH where HH is a 2-char hex XOR checksum."""
     try:
+        line = line.strip()
+
+        if not line.startswith("$") or "*" not in line:
+            return None
+
+        body = line[1:]
+        payload, _, checksum_hex = body.partition("*")
+
+        if len(checksum_hex) != 2:
+            return None
+
+        expected = int(checksum_hex, 16)
+        actual = _xor_checksum(payload)
+        if expected != actual:
+            return None
+
         fields = {}
-        for part in line.strip().split(","):
+        for part in payload.split(","):
             key, _, raw = part.partition(":")
             name = _KEYS.get(key.strip())
             if name:

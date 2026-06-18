@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         btn_home      = NavButton("Home",icon=os.path.join(ICONS, "home.png"))
         btn_settings  = NavButton("Logs",icon=os.path.join(ICONS, "setting.png"))
         btn_telemetry = NavButton("Telemetry",icon=os.path.join(ICONS, "line-chart.png"))
-        btn_fuelmaps  = NavButton("Fuel Maps",icon=os.path.join(ICONS, "setting.png"))
+        btn_fuelmaps  = NavButton("VE Map",icon=os.path.join(ICONS, "setting.png"))
         self._btns = [btn_home, btn_settings, btn_telemetry, btn_fuelmaps]
 
         def switch(index):

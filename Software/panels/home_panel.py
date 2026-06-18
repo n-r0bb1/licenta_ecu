@@ -25,6 +25,7 @@ def _load_profiles() -> dict:
         e["name"]: {
             "Engine CC":   e["engine_cc"],
             "Engine Vol":  e["engine_vol"],
+            "Cylinders":   str(e.get("cylinders", "—")),
             "Horsepower":  e["horsepower"],
             "Traction":    e["traction"],
             "Weight":      e["weight"],
@@ -383,6 +384,7 @@ class CarProfileCard(QFrame):
         SPEC_KEYS = [
             ("Engine CC",  "Engine CC"),
             ("Engine Vol", "Engine Vol"),
+            ("Cylinders",  "Cylinders"),
             ("Horsepower", "Horsepower"),
             ("Traction",   "Traction"),
             ("Weight",     "Weight"),

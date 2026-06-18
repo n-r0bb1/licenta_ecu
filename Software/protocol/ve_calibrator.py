@@ -110,9 +110,7 @@ class VECalibrator:
             return False
 
         # ── predicted flow (without VE, so we can compute the true VE) ───────
-        # Re-derive the un-VE-scaled flow from the engine's last outputs.
-        # engine.flow_ml_s = pulse_ms * ML_PER_MS * cylinders * firings * ve
-        # We want: predicted_base = engine.flow_ml_s / current_ve
+        # engine.flow_ml_s is proportional to VE; divide out to get the base
         load = throttle_pct
         rpm  = engine.rpm
         current_ve_frac = engine._lookup_ve(load, rpm) / 100.0
@@ -129,18 +127,23 @@ class VECalibrator:
         true_ve_frac = obs_ml_s / predicted_base_ml_s
         true_ve_pct  = true_ve_frac * 100.0
 
-        # ── locate the cell ───────────────────────────────────────────────────
-        from protocol.fuel_engine import _nearest_row, _nearest_col, LOAD_STEPS, RPM_STEPS
-        row = _nearest_row(load)
-        col = _nearest_col(rpm)
+        # ── locate the cell (MAP kPa × RPM grid) ─────────────────────────────
+        from protocol.fuel_engine import (
+            _nearest_ve_row, _nearest_ve_col, _throttle_to_map_kpa,
+            MAP_STEPS, VE_RPM_STEPS,
+        )
+        map_kpa = _throttle_to_map_kpa(load)
+        row = _nearest_ve_row(map_kpa)
+        col = _nearest_ve_col(rpm)
 
         # ── ensure VE map exists in engine ────────────────────────────────────
         if engine._ve_map is None:
-            # bootstrap from default curve
             engine._ve_map = [
-                [engine._lookup_ve(LOAD_STEPS[r], RPM_STEPS[c])
-                 for c in range(len(RPM_STEPS))]
-                for r in range(len(LOAD_STEPS))
+                [engine._lookup_ve(
+                    (MAP_STEPS[r] - 20.0) / 81.0 * 100.0,
+                    VE_RPM_STEPS[c],
+                ) for c in range(len(VE_RPM_STEPS))]
+                for r in range(len(MAP_STEPS))
             ]
 
         # ── SGD nudge ─────────────────────────────────────────────────────────
@@ -175,11 +178,11 @@ class VECalibrator:
             self._updates_since_save = 0
 
     def _flush(self, car_name: str, ve_map: list[list[float]]):
-        from protocol.fuel_engine import LOAD_STEPS, RPM_STEPS
+        from protocol.fuel_engine import MAP_STEPS, VE_RPM_STEPS
         os.makedirs(self._ve_dir, exist_ok=True)
         path = os.path.join(self._ve_dir, f"{_slug(car_name)}.csv")
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["load_pct"] + [str(r) for r in RPM_STEPS])
-            for r, load in enumerate(LOAD_STEPS):
-                w.writerow([str(load)] + [f"{v:.1f}" for v in ve_map[r]])
+            w.writerow(["map_kpa"] + [str(r) for r in VE_RPM_STEPS])
+            for r, kpa in enumerate(MAP_STEPS):
+                w.writerow([str(kpa)] + [f"{v:.1f}" for v in ve_map[r]])

@@ -8,7 +8,7 @@ typedef struct {
     float fuel_pct;
     float eng_temp;
     float air_temp;
-    float humidity;
+    float pressure;
 } SensorPacket;
 
 void packet_send(const SensorPacket& pkt);
