@@ -12,7 +12,6 @@
 
 // Digital Pins
 #define PIN_DHT11        2
-#define PIN_SW420        8
 
 // DHT Type
 #define DHT_TYPE         DHT11

@@ -19,6 +19,7 @@ from widgets import config
 
 ICONS    = os.path.join(os.path.dirname(__file__), "widgets", "icons")
 PORT     = "/dev/ttyUSB0"
+#PORT     = "/tmp/vGUI"
 BAUDRATE = 9600
 
 

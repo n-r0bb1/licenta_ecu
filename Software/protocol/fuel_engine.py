@@ -31,6 +31,7 @@ MAP_STEPS    = list(range(20, 105, 5))         # 20 … 100 kPa (17 rows)
 _GEAR_RATIOS    = [3.31, 1.95, 1.41, 1.00, 0.74, 0.64]
 _UPSHIFT_FRAC   = 0.78
 _DOWNSHIFT_FRAC = 0.38
+_IDLE_RPM       = 750.0
 
 # ── thermodynamic constants ───────────────────────────────────────────────────
 _AIR_DENSITY_KG_ML = 0.001225 / 1000.0   # kg per mL at sea level / 15 °C
@@ -177,16 +178,20 @@ class FuelMapEngine:
 
         flow_ml_s = fuel_ml_per_fire * firings_per_sec
 
-        speed_kmh = max(1.0, (rpm / self._rpm_max) * self._max_speed)
+        # speed directly from throttle (same mapping used in _auto_rpm)
+        speed_kmh = (load / 100.0) * self._max_speed
 
-        l100 = (flow_ml_s / 1000.0 * 3600.0) / speed_kmh * 100.0
-        l100 = max(0.1, l100)
+        if speed_kmh < 1.0:
+            l100 = 0.0
+        else:
+            l100 = (flow_ml_s / 1000.0 * 3600.0) / speed_kmh * 100.0
+        l100 = max(0.0, l100)
 
-        mpg = 235.214573 / l100
+        mpg = 235.214573 / l100 if l100 > 0 else 0.0
 
         fuel_l = fuel_liters_override if fuel_liters_override > 0 \
                  else (max(0.0, fuel_pct) / 100.0) * self._tank_l
-        range_km = (fuel_l / l100) * 100.0
+        range_km = (fuel_l / l100) * 100.0 if l100 > 0 else 0.0
 
         self.gear     = self._gear
         self.rpm      = rpm
@@ -199,22 +204,27 @@ class FuelMapEngine:
     # ── automatic gearbox ─────────────────────────────────────────────────────
 
     def _auto_rpm(self, load_pct: float) -> float:
-        rpm_max = self._rpm_max
+        """
+        Throttle sets target speed proportionally.  Gear is chosen to keep
+        RPM in a comfortable band, then RPM is derived from speed + gear.
+        """
+        rpm_max   = self._rpm_max
+        top_ratio = _GEAR_RATIOS[-1]
+        speed_kmh = (load_pct / 100.0) * self._max_speed
 
-        for _ in range(len(_GEAR_RATIOS)):
-            ratio       = _GEAR_RATIOS[self._gear - 1]
-            max_in_gear = rpm_max * (ratio / _GEAR_RATIOS[0])
-            max_in_gear = min(max_in_gear, rpm_max)
-            idle_rpm    = max_in_gear * 0.20
+        # find the highest gear that keeps RPM above a comfortable minimum
+        min_cruise_rpm = _IDLE_RPM * 1.5
+        best_gear = 1
+        for g in range(1, len(_GEAR_RATIOS) + 1):
+            ratio = _GEAR_RATIOS[g - 1]
+            rpm   = (speed_kmh / self._max_speed) * rpm_max * (ratio / top_ratio)
+            if rpm >= min_cruise_rpm:
+                best_gear = g
 
-            rpm = idle_rpm + (load_pct / 100.0) * (max_in_gear - idle_rpm)
-
-            if rpm > rpm_max * _UPSHIFT_FRAC and self._gear < len(_GEAR_RATIOS):
-                self._gear += 1
-            elif rpm < rpm_max * _DOWNSHIFT_FRAC and self._gear > 1:
-                self._gear -= 1
-            else:
-                break
+        self._gear = best_gear
+        cur_ratio  = _GEAR_RATIOS[self._gear - 1]
+        rpm = (speed_kmh / self._max_speed) * rpm_max * (cur_ratio / top_ratio)
+        rpm = max(rpm, _IDLE_RPM)
 
         return round(rpm, 0)
 
