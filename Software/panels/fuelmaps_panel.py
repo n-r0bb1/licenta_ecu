@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QSizePolicy, QComboBox,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QFont, QPainter
 from widgets import config
 
@@ -165,6 +165,25 @@ class _RotatedLabel(QWidget):
                          Qt.AlignmentFlag.AlignCenter, self._text)
 
 
+# ── nearest cell helpers ──────────────────────────────────────────────────────
+
+def _nearest_row(map_kpa: float) -> int:
+    map_kpa = max(MAP_STEPS[0], min(MAP_STEPS[-1], map_kpa))
+    return min(range(len(MAP_STEPS)),
+               key=lambda i: abs(MAP_STEPS[i] - map_kpa))
+
+
+def _nearest_col(rpm: float) -> int:
+    rpm = max(RPM_STEPS[0], min(RPM_STEPS[-1], rpm))
+    return min(range(len(RPM_STEPS)),
+               key=lambda i: abs(RPM_STEPS[i] - rpm))
+
+
+def _throttle_to_map_kpa(throttle_pct: float) -> float:
+    """Closed throttle ≈ 20 kPa (high vacuum), WOT ≈ 101 kPa (atmospheric)."""
+    return 20.0 + (throttle_pct / 100.0) * 81.0
+
+
 # ── VEMapTable ────────────────────────────────────────────────────────────────
 
 class VEMapTable(QWidget):
@@ -173,11 +192,16 @@ class VEMapTable(QWidget):
     Mimics a real AFR/VE table layout with pressure on the Y-axis.
     """
 
+    # emitted whenever the VE map is saved (cell edit, Save button, or Reset)
+    map_saved = Signal(str)  # car_name
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._car_name: str = ""
         self._data: list[list[float]] = _build_default_ve_table()
         self._ignore_change = False
+        self._hl_row: int | None = None   # highlighted row (engine operating point)
+        self._hl_col: int | None = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -351,9 +375,55 @@ class VEMapTable(QWidget):
         if idx >= 0 and idx != self._combo.currentIndex():
             self._combo.setCurrentIndex(idx)
 
+    # ── live operating point highlight ────────────────────────────────────────
+
+    def set_operating_point(self, rpm: float, map_kpa: float):
+        """Highlight the cell matching the engine's current (RPM, MAP kPa)."""
+        row = _nearest_row(map_kpa)
+        col = _nearest_col(rpm)
+        # restore previous highlight cell to normal color
+        if self._hl_row is not None and self._hl_col is not None:
+            old_item = self._table.item(self._hl_row, self._hl_col)
+            if old_item:
+                val = self._data[self._hl_row][self._hl_col]
+                flat = [v for row in self._data for v in row]
+                bg, fg = _ve_cell_color(val, min(flat), max(flat))
+                old_item.setBackground(QBrush(bg))
+                old_item.setForeground(QBrush(fg))
+                old_font = old_item.font()
+                old_font.setBold(False)
+                old_font.setPointSize(10)   # use your table's normal font size
+                old_item.setFont(old_font)       
+        # highlight new cell
+        new_item = self._table.item(row, col)
+        if new_item is None:
+            new_item = QTableWidgetItem()
+            self._table.setItem(row, col, new_item)
+        new_item.setBackground(QBrush(QColor("#00E5FF")))   # bright cyan
+        new_item.setForeground(QBrush(QColor("#000000")))   # black text
+        font = new_item.font()
+        font.setBold(True)
+        font.setPointSize(18)   # 2 points larger than normal
+        new_item.setFont(font)
+
+        self._hl_row, self._hl_col = row, col
+
+    def clear_operating_point(self):
+        """Remove highlight when no valid operating point (e.g. neutral)."""
+        if self._hl_row is not None and self._hl_col is not None:
+            old_item = self._table.item(self._hl_row, self._hl_col)
+            if old_item:
+                val = self._data[self._hl_row][self._hl_col]
+                flat = [v for row in self._data for v in row]
+                bg, fg = _ve_cell_color(val, min(flat), max(flat))
+                old_item.setBackground(QBrush(bg))
+                old_item.setForeground(QBrush(fg))
+        self._hl_row, self._hl_col = None, None
+
     # ── data ──────────────────────────────────────────────────────────────────
 
     def _on_car_changed(self, car_name: str):
+        print("VE editor car:", car_name)
         self._car_name = car_name
         loaded = _load_ve_csv(car_name)
         if loaded:
@@ -410,6 +480,7 @@ class VEMapTable(QWidget):
             return
         _save_ve_csv(self._car_name, self._data)
         self._status_lbl.setText(f"Saved  →  {os.path.relpath(_ve_csv_path(self._car_name))}")
+        self.map_saved.emit(self._car_name)
 
     def _reset(self):
         self._data = _build_default_ve_table()
@@ -417,6 +488,7 @@ class VEMapTable(QWidget):
         if self._car_name:
             _save_ve_csv(self._car_name, self._data)
             self._update_status()
+            self.map_saved.emit(self._car_name)
 
     # ── cell interaction ──────────────────────────────────────────────────────
 
@@ -437,6 +509,7 @@ class VEMapTable(QWidget):
         self._recolor_all()
         if self._car_name:
             _save_ve_csv(self._car_name, self._data)
+            self.map_saved.emit(self._car_name)
 
     def _on_cell_hover(self, row: int, col: int):
         if 0 <= row < len(MAP_STEPS) and 0 <= col < len(RPM_STEPS):
@@ -452,7 +525,13 @@ class VEMapTable(QWidget):
 class FuelMapsDock(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._ve_table = VEMapTable()
         self._setup_ui()
+
+    @property
+    def ve_table(self) -> VEMapTable:
+        """Expose the embedded VEMapTable so MainWindow can wire live highlights."""
+        return self._ve_table
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -462,6 +541,6 @@ class FuelMapsDock(QWidget):
         panel.setStyleSheet(config.PANEL_STYLE)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(16, 16, 16, 16)
-        panel_layout.addWidget(VEMapTable())
+        panel_layout.addWidget(self._ve_table)
 
         root.addWidget(panel)

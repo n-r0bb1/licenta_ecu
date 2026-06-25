@@ -126,6 +126,7 @@ class FuelMapEngine:
 
         # internal shift state
         self._gear = 1
+        self._neutral = False
 
     def set_car(self, car_name: str, tank_liters: float | None = None):
         self._car_name = car_name
@@ -143,6 +144,7 @@ class FuelMapEngine:
 
         self._ve_map = _load_ve_map(car_name)
         self._gear   = 1
+        self._neutral = False
 
     def set_tank(self, liters: float):
         self._tank_l = liters
@@ -150,13 +152,23 @@ class FuelMapEngine:
     def reload_ve_map(self):
         if self._car_name:
             self._ve_map = _load_ve_map(self._car_name)
+            print("Reloaded VE map for", self._car_name)
+
+    def set_neutral(self, enabled: bool):
+        self._neutral = enabled
+
+    def is_neutral(self) -> bool:
+        return self._neutral
 
     # ── core update ───────────────────────────────────────────────────────────
 
     def update(self, throttle_pct: float, fuel_pct: float,
                fuel_liters_override: float = 0.0) -> None:
         load = max(0.0, min(100.0, throttle_pct))
-        rpm  = self._auto_rpm(load)
+        if self._neutral:
+            rpm = _IDLE_RPM
+        else:
+            rpm = self._auto_rpm(load)
         ve   = self._lookup_ve(load, rpm) / 100.0   # 0.0–1.0
 
         # displacement per combustion event (4-stroke: fires every 2 revs)
@@ -181,7 +193,7 @@ class FuelMapEngine:
         # speed directly from throttle (same mapping used in _auto_rpm)
         speed_kmh = (load / 100.0) * self._max_speed
 
-        if speed_kmh < 1.0:
+        if speed_kmh < 1.0 or self._neutral:
             l100 = 0.0
         else:
             l100 = (flow_ml_s / 1000.0 * 3600.0) / speed_kmh * 100.0
@@ -193,7 +205,7 @@ class FuelMapEngine:
                  else (max(0.0, fuel_pct) / 100.0) * self._tank_l
         range_km = (fuel_l / l100) * 100.0 if l100 > 0 else 0.0
 
-        self.gear     = self._gear
+        self.gear     = 0 if self._neutral else self._gear
         self.rpm      = rpm
         self.ve_pct   = round(ve * 100.0, 1)
         self.flow_ml_s = flow_ml_s
@@ -224,7 +236,11 @@ class FuelMapEngine:
         self._gear = best_gear
         cur_ratio  = _GEAR_RATIOS[self._gear - 1]
         rpm = (speed_kmh / self._max_speed) * rpm_max * (cur_ratio / top_ratio)
-        rpm = max(rpm, _IDLE_RPM)
+        # only apply idle floor when the car is moving (load > 0)
+        if load_pct > 0:
+            rpm = max(rpm, _IDLE_RPM)
+        else:
+            rpm = 0.0
 
         return round(rpm, 0)
 
@@ -242,4 +258,9 @@ class FuelMapEngine:
             return round(max(25.0, min(100.0, ve)), 1)
         row = _nearest_ve_row(map_kpa)
         col = _nearest_ve_col(rpm)
+        print(
+        f"Lookup -> MAP={MAP_STEPS[row]} "
+        f"RPM={VE_RPM_STEPS[col]} "
+        f"VE={self._ve_map[row][col]}"
+)
         return self._ve_map[row][col]

@@ -57,10 +57,17 @@ class MainWindow(QMainWindow):
         self._worker = SerialWorker(PORT, BAUDRATE)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(HomeDock(worker=self._worker))   # 0
+        home       = HomeDock(worker=self._worker)            # 0
+        self.stack.addWidget(home)
         self.stack.addWidget(LogsDock(worker=self._worker))   # 1
         self.stack.addWidget(TelemDock(worker=self._worker))  # 2
-        self.stack.addWidget(FuelMapsDock())                  # 3
+        fuel       = FuelMapsDock()                           # 3
+        self.stack.addWidget(fuel)
+
+        # wire live VE map operating point highlight
+        home.operating_point.connect(fuel.ve_table.set_operating_point)
+        # when the VE map is edited/saved, reload it into the engine model
+        fuel.ve_table.map_saved.connect(lambda _: home.reload_ve_map())
         self.setCentralWidget(self.stack)
 
         self._worker.start()
