@@ -3,16 +3,15 @@
 
 void engtemp_begin()
 {
-    pinMode(PIN_ENGTEMP, INPUT);
+    pinMode(A3, INPUT);
 }
 
 float engtemp_getTemp()
 {
-    long sum = 0;
-    for (int i = 0; i < 10; i++)
-    {
-        sum += analogRead(PIN_ENGTEMP);
-        delay(10);
-    }
-    return (sum / 10.0) * (488.0 / 1023.0);
+    analogRead(PIN_ENGTEMP);   // Dummy read
+    delayMicroseconds(10);
+
+    int adcValue = analogRead(PIN_ENGTEMP);
+
+    return adcValue * (480.0f / 1023.0f);
 }

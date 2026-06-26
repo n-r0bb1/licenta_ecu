@@ -8,7 +8,7 @@
 // Analog Pins
 #define PIN_THROTTLE     A0
 #define PIN_FUEL_LEVEL   A1
-#define PIN_ENGTEMP      A2
+#define PIN_ENGTEMP      A3
 
 // Digital Pins
 #define PIN_DHT11        2
